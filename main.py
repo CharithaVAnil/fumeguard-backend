@@ -260,7 +260,7 @@ def post_data(reading: SensorReading):
         iso_input = np.array([[ppm_delta, rolling_std, hour]])
         iso_pred = iso_forest.predict(iso_input)[0]
         anomaly_score = float(-iso_forest.decision_function(iso_input)[0])
-        is_anomaly = (iso_pred == -1)
+        is_anomaly = bool(iso_pred == -1)
     except Exception as e:
         print(f"Isolation Forest error: {e}")
 

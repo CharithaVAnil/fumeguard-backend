@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fume Guard AI — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #060a0f;
+    --surface:  #0d1520;
+    --card:     #111d2e;
+    --border:   #1e3a5f;
+    --accent:   #00d4ff;
+    --accent2:  #00ff9d;
+    --warn:     #ffb800;
+    --danger:   #ff3b3b;
+    --text:     #e2eaf4;
+    --muted:    #5a7a9a;
+    --font-mono: 'Share Tech Mono', monospace;
+    --font-main: 'Barlow', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-main);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,255,0.015) 2px, rgba(0,212,255,0.015) 4px);
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .live-badge {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--accent2);
+    letter-spacing: 1px;
+  }
+
+  .live-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent2);
+    box-shadow: 0 0 8px var(--accent2);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  .status-badge {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    transition: all 0.4s;
+  }
+
+  .status-normal  { background: rgba(0,255,157,0.15); color: var(--accent2); border: 1px solid var(--accent2); }
+  .status-warning { background: rgba(255,184,0,0.15);  color: var(--warn);    border: 1px solid var(--warn); }
+  .status-danger  { background: rgba(255,59,59,0.15);  color: var(--danger);  border: 1px solid var(--danger); animation: blink 0.8s infinite; }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .header-time {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    padding: 24px 28px;
+    display: grid;
+    gap: 20px;
+  }
+
+  /* ── TOP ROW — 4 cards ── */
+  .top-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    opacity: 0.6;
+  }
+
+  .card:hover { border-color: var(--accent); }
+
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .card-value {
+    font-size: 42px;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 4px;
+    transition: color 0.4s;
+  }
+
+  .card-unit {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* Safety Score special card */
+  .score-card .card-value { color: var(--accent2); }
+  .score-safe    .card-value { color: var(--accent2) !important; }
+  .score-warning .card-value { color: var(--warn)    !important; }
+  .score-danger  .card-value { color: var(--danger)  !important; }
+
+  /* Gas type badge */
+  .gas-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    background: rgba(0,212,255,0.12);
+    color: var(--accent);
+    border: 1px solid rgba(0,212,255,0.3);
+    margin-top: 4px;
+  }
+
+  /* Fan speed bar */
+  .fan-bar-wrap {
+    margin-top: 10px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    height: 6px;
+    overflow: hidden;
+  }
+
+  .fan-bar {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.8s ease;
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* Fan override button */
+  .fan-btn {
+    margin-top: 12px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .fan-btn:hover { background: rgba(0,212,255,0.15); }
+  .fan-btn.active { background: rgba(0,212,255,0.25); box-shadow: 0 0 12px rgba(0,212,255,0.3); }
+
+  /* ── MIDDLE ROW — chart ── */
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .chart-title {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .chart-legend {
+    display: flex;
+    gap: 20px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 10px; height: 3px;
+    border-radius: 2px;
+  }
+
+  .legend-dash {
+    width: 16px; height: 0;
+    border-top: 2px dashed;
+    opacity: 0.7;
+  }
+
+  .chart-wrap {
+    height: 280px;
+    position: relative;
+  }
+
+  /* ── BOTTOM ROW ── */
+  .bottom-row {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+  }
+
+  /* Incident log */
+  .log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  .log-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .export-btn {
+    padding: 7px 16px;
+    border-radius: 6px;
+    border: 1px solid var(--accent2);
+    background: transparent;
+    color: var(--accent2);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+
+  .export-btn:hover { background: rgba(0,255,157,0.12); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  thead th {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(30,58,95,0.5);
+    transition: background 0.2s;
+    animation: rowIn 0.3s ease;
+  }
+
+  @keyframes rowIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  tbody tr:hover { background: rgba(0,212,255,0.04); }
+
+  tbody td {
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .severity-high   { color: var(--danger); }
+  .severity-medium { color: var(--warn); }
+  .severity-low    { color: var(--accent2); }
+
+  /* Heatmap panel */
+  .heatmap-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+  }
+
+  .heatmap-cell {
+    height: 32px;
+    border-radius: 4px;
+    transition: background 0.5s;
+    position: relative;
+  }
+
+  .heatmap-cell:hover::after {
+    content: attr(data-val) ' ppm';
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    border: 1px solid var(--border);
+  }
+
+  .heatmap-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--muted);
+  }
+
+  /* ── MOCK MODE BANNER ── */
+  .mock-banner {
+    background: rgba(255,184,0,0.1);
+    border: 1px solid rgba(255,184,0,0.3);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--warn);
+    letter-spacing: 1px;
+    text-align: center;
+    display: none;
+  }
+
+  .mock-banner.show { display: block; }
+
+  /* ── CONNECTION PANEL ── */
+  .conn-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .conn-item {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .conn-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .conn-dot.ok     { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+  .conn-dot.warn   { background: var(--warn);    box-shadow: 0 0 6px var(--warn); }
+  .conn-dot.off    { background: var(--muted); }
+
+  .conn-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .conn-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    margin-top: 2px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  @media (max-width: 900px) {
+    .top-cards { grid-template-columns: repeat(2,1fr); }
+    .bottom-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛡️</div>
+    <div>
+      <div class="logo-text">Fume Guard AI</div>
+      <div class="logo-sub">REAL-TIME GAS MONITORING SYSTEM</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+    <div class="status-badge status-normal" id="statusBadge">● NORMAL</div>
+    <div class="header-time" id="headerTime">--:--:--</div>
+  </div>
+</header>
+
+<!-- ── MAIN ── -->
+<main>
+
+  <!-- Mock mode banner -->
+  <div class="mock-banner show" id="mockBanner">
+    ⚠ DEMO MODE — Using simulated sensor data. Connect ESP32 backend to show live readings.
+  </div>
+
+  <!-- Connection status row -->
+  <div class="conn-row">
+    <div class="conn-item">
+      <div class="conn-dot warn" id="dotFirebase"></div>
+      <div>
+        <div class="conn-label">Firebase DB</div>
+        <div class="conn-val" id="connFirebase">Connecting...</div>
+      </div>
+    </div>
+    <div class="conn-item">
+      <div class="conn-dot off" id="dotApi"></div>
+      <div>
+        <div class="conn-label">Flask API</div>
+        <div class="conn-val" id="connApi">Not connected</div>
+      </div>
+    </div>
+    <div class="conn-item">
+      <div class="conn-dot off" id="dotEsp"></div>
+      <div>
+        <div class="conn-label">ESP32 Device</div>
+        <div class="conn-val" id="connEsp">Offline</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top 4 cards -->
+  <div class="top-cards">
+
+    <!-- Safety Score -->
+    <div class="card score-card" id="scoreCard">
+      <div class="card-label">Safety Score</div>
+      <div class="card-value" id="scoreVal">--</div>
+      <div class="card-unit">/ 100  ·  Air Quality Index</div>
+    </div>
+
+    <!-- Gas Type -->
+    <div class="card">
+      <div class="card-label">Detected Gas</div>
+      <div class="gas-badge" id="gasType">---</div>
+      <div class="card-unit" style="margin-top:8px" id="gasConf">Classifier confidence: --%</div>
+    </div>
+
+    <!-- Fan Speed -->
+    <div class="card">
+      <div class="card-label">Fan Speed</div>
+      <div class="card-value" id="fanVal" style="color:var(--accent)">--%</div>
+      <div class="fan-bar-wrap"><div class="fan-bar" id="fanBar" style="width:0%"></div></div>
+      <button class="fan-btn" id="fanBtn" onclick="toggleFan()">Force Fan ON</button>
+    </div>
+
+    <!-- PPM Live -->
+    <div class="card">
+      <div class="card-label">Current PPM</div>
+      <div style="display:flex; gap:16px; align-items:flex-end">
+        <div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:4px">MQ-135</div>
+          <div class="card-value" id="mq135Val" style="color:var(--accent);font-size:32px">---</div>
+        </div>
+        <div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:4px">MQ-2</div>
+          <div class="card-value" id="mq2Val" style="color:#ff7c2a;font-size:32px">---</div>
+        </div>
+      </div>
+      <div class="card-unit" id="lstmForecast">LSTM +30s: -- ppm</div>
+    </div>
+
+  </div>
+
+  <!-- Real-time chart -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <div class="chart-title">PPM History + LSTM Forecast</div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#00d4ff"></div> MQ-135</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff7c2a"></div> MQ-2</div>
+        <div class="legend-item"><div class="legend-dash" style="border-color:#a855f7"></div> LSTM Predict</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff3b3b"></div> Danger Line</div>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="ppmChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Bottom row -->
+  <div class="bottom-row">
+
+    <!-- Incident Log -->
+    <div class="card">
+      <div class="log-header">
+        <div class="log-title">⚠ Incident Log</div>
+        <button class="export-btn" onclick="exportPDF()">⬇ Export PDF</button>
+      </div>
+      <div style="overflow-x:auto; max-height:220px; overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Gas</th>
+              <th>MQ-135</th>
+              <th>MQ-2</th>
+              <th>Action</th>
+              <th>Severity</th>
+            </tr>
+          </thead>
+          <tbody id="incidentLog">
+            <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;font-family:var(--font-mono);font-size:11px">No incidents recorded yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Heatmap -->
+    <div class="card">
+      <div class="heatmap-title">Gas Concentration Heatmap</div>
+      <div class="heatmap-grid" id="heatmapGrid"></div>
+      <div class="heatmap-labels">
+        <span>-30min</span><span>-25m</span><span>-20m</span><span>-15m</span><span>-10m</span><span>Now</span>
+      </div>
+      <div style="margin-top:16px">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--muted);letter-spacing:1px;margin-bottom:8px">SCALE</div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <div style="height:8px;flex:1;border-radius:4px;background:linear-gradient(90deg,#0a3f2a,#00ff9d,#ffb800,#ff3b3b)"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:4px;font-family:var(--font-mono);font-size:9px;color:var(--muted)">
+          <span>0</span><span>200</span><span>400</span><span>600+</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- ── FIREBASE + LOGIC ── -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  // ── YOUR FIREBASE CONFIG ──
+  const firebaseConfig = {
+    apiKey: "AIzaSyDImU_34puL9cUvGvBlFbRkeUxhyEKGOqc",
+    authDomain: "fume-guard-ai-ec851.firebaseapp.com",
+    databaseURL: "https://fume-guard-ai-ec851-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "fume-guard-ai-ec851",
+    storageBucket: "fume-guard-ai-ec851.firebasestorage.app",
+    messagingSenderId: "334083903007",
+    appId: "1:334083903007:web:a2689f380168ce00744f2a"
+  };
+
+  // ── Flask API URL — replace with Railway URL during event ──
+  const API_URL = "https://fumeguard-backend-production.up.railway.app";
+
+  // ── MOCK MODE (set false when real backend is ready) ──
+  let MOCK_MODE = false;
+
+  // ── STATE ──
+  let incidents = [];
+  let fanOverride = false;
+  let chartLabels = [];
+  let mq135Data = [], mq2Data = [], lstmData = [];
+  const MAX_POINTS = 30;
+  const DANGER_PPM = 400;
+
+  // ── CLOCK ──
+  function updateClock() {
+    document.getElementById('headerTime').textContent =
+      new Date().toLocaleTimeString('en-IN', { hour12: false });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  // ── CHART SETUP ──
+  const ctx = document.getElementById('ppmChart').getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [
+        {
+          label: 'MQ-135', data: mq135Data,
+          borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.07)',
+          borderWidth: 2, tension: 0.4, pointRadius: 2, fill: true
+        },
+        {
+          label: 'MQ-2', data: mq2Data,
+          borderColor: '#ff7c2a', backgroundColor: 'rgba(255,124,42,0.07)',
+          borderWidth: 2, tension: 0.4, pointRadius: 2, fill: true
+        },
+        {
+          label: 'LSTM Forecast', data: lstmData,
+          borderColor: '#a855f7', backgroundColor: 'transparent',
+          borderWidth: 2, borderDash: [6, 4], tension: 0.4, pointRadius: 0, fill: false
+        }
+      ]
+    },
+    options: {
+      animation: { duration: 400 },
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: {
+          grid: { color: 'rgba(30,58,95,0.5)' },
+          ticks: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 }, maxTicksLimit: 8 }
+        },
+        y: {
+          grid: { color: 'rgba(30,58,95,0.5)' },
+          ticks: { color: '#5a7a9a', font: { family: 'Share Tech Mono', size: 10 } },
+          min: 0,
+          afterDataLimits: (scale) => { scale.max = Math.max(scale.max, 500); }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0d1520',
+          borderColor: '#1e3a5f',
+          borderWidth: 1,
+          titleColor: '#00d4ff',
+          bodyColor: '#e2eaf4',
+          titleFont: { family: 'Share Tech Mono' },
+          bodyFont: { family: 'Share Tech Mono', size: 12 }
+        }
+      }
+    },
+    plugins: [{
+      id: 'dangerLine',
+      beforeDraw(chart) {
+        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+        const y70 = y.getPixelForValue(DANGER_PPM * 0.7);
+        const y100 = y.getPixelForValue(DANGER_PPM);
+        ctx.save();
+        // 70% line (orange)
+        ctx.strokeStyle = 'rgba(255,184,0,0.5)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath(); ctx.moveTo(left, y70); ctx.lineTo(right, y70); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,184,0,0.7)';
+        ctx.font = '10px Share Tech Mono'; ctx.fillText('WARN 70%', right - 60, y70 - 4);
+        // 100% line (red)
+        ctx.strokeStyle = 'rgba(255,59,59,0.6)'; ctx.lineWidth = 1;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath(); ctx.moveTo(left, y100); ctx.lineTo(right, y100); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,59,59,0.8)';
+        ctx.fillText('DANGER 100%', right - 80, y100 - 4);
+        ctx.restore();
+      }
+    }]
+  });
+
+  // ── HEATMAP INIT ──
+  const hgrid = document.getElementById('heatmapGrid');
+  let heatCells = [];
+  for (let r = 0; r < 2; r++) {
+    for (let c = 0; c < 6; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      cell.dataset.val = '0';
+      hgrid.appendChild(cell);
+      heatCells.push(cell);
+    }
+  }
+
+  function ppmToColor(ppm) {
+    const ratio = Math.min(ppm / 600, 1);
+    const r = Math.round(ratio < 0.5 ? ratio * 2 * 255 * 0.6 : 255);
+    const g = Math.round(ratio < 0.5 ? 255 * 0.8 : (1 - ratio) * 2 * 255 * 0.8);
+    const b = Math.round((1 - ratio) * 100);
+    return `rgba(${r},${g},${b},0.7)`;
+  }
+
+  let heatHistory = Array(12).fill(0);
+
+  function updateHeatmap(ppm) {
+    heatHistory.push(ppm);
+    if (heatHistory.length > 12) heatHistory.shift();
+    heatCells.forEach((cell, i) => {
+      const v = heatHistory[i] || 0;
+      cell.style.background = ppmToColor(v);
+      cell.dataset.val = Math.round(v);
+    });
+  }
+
+  // ── SAFETY SCORE ──
+  function calcScore(mq135, mq2) {
+    const max = Math.max(mq135, mq2);
+    return Math.max(0, Math.round(100 - (max / DANGER_PPM) * 100));
+  }
+
+  function updateScoreUI(score) {
+    const el = document.getElementById('scoreVal');
+    const card = document.getElementById('scoreCard');
+    const badge = document.getElementById('statusBadge');
+    el.textContent = score;
+    card.className = 'card score-card ' + (score > 70 ? 'score-safe' : score > 40 ? 'score-warning' : 'score-danger');
+    if (score > 70) {
+      badge.className = 'status-badge status-normal'; badge.textContent = '● NORMAL';
+    } else if (score > 40) {
+      badge.className = 'status-badge status-warning'; badge.textContent = '⚠ WARNING';
+    } else {
+      badge.className = 'status-badge status-danger'; badge.textContent = '✖ DANGER';
+    }
+  }
+
+  // ── INCIDENT LOGGER ──
+  function logIncident(gas, mq135, mq2, action, severity) {
+    const time = new Date().toLocaleTimeString('en-IN', { hour12: false });
+    incidents.unshift({ time, gas, mq135: Math.round(mq135), mq2: Math.round(mq2), action, severity });
+    if (incidents.length > 50) incidents.pop();
+    renderLog();
+  }
+
+  function renderLog() {
+    const tbody = document.getElementById('incidentLog');
+    if (!incidents.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;font-family:var(--font-mono);font-size:11px">No incidents recorded</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = incidents.map(i => `
+      <tr>
+        <td>${i.time}</td>
+        <td>${i.gas}</td>
+        <td>${i.mq135} ppm</td>
+        <td>${i.mq2} ppm</td>
+        <td>${i.action}</td>
+        <td class="severity-${i.severity}">${i.severity.toUpperCase()}</td>
+      </tr>
+    `).join('');
+  }
+
+  // ── FAN OVERRIDE ──
+  window.toggleFan = function() {
+    fanOverride = !fanOverride;
+    const btn = document.getElementById('fanBtn');
+    btn.textContent = fanOverride ? 'Force Fan OFF' : 'Force Fan ON';
+    btn.className = 'fan-btn' + (fanOverride ? ' active' : '');
+    // POST to backend (when available)
+    fetch(`${API_URL}/fan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ override: fanOverride })
+    }).catch(() => {}); // fail silently in demo mode
+  };
+
+  // ── PDF EXPORT ──
+  window.exportPDF = function() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(0, 212, 255);
+    doc.text('FUME GUARD AI — INCIDENT REPORT', 14, 16);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 120, 140);
+    doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, 14, 24);
+    doc.text(`Safety Score: ${document.getElementById('scoreVal').textContent}/100`, 14, 30);
+    doc.setDrawColor(30, 58, 95);
+    doc.line(14, 34, 196, 34);
+    if (!incidents.length) {
+      doc.setTextColor(180, 180, 180);
+      doc.text('No incidents recorded.', 14, 44);
+    } else {
+      doc.setFontSize(8);
+      const headers = ['TIME', 'GAS', 'MQ-135', 'MQ-2', 'ACTION', 'SEVERITY'];
+      const colX = [14, 38, 65, 88, 110, 162];
+      doc.setTextColor(0, 212, 255);
+      headers.forEach((h, i) => doc.text(h, colX[i], 42));
+      doc.line(14, 44, 196, 44);
+      doc.setTextColor(220, 230, 240);
+      incidents.slice(0, 30).forEach((inc, row) => {
+        const y = 52 + row * 8;
+        [inc.time, inc.gas, inc.mq135+' ppm', inc.mq2+' ppm', inc.action, inc.severity.toUpperCase()]
+          .forEach((v, i) => doc.text(String(v), colX[i], y));
+      });
+    }
+    doc.save(`fume-guard-report-${Date.now()}.pdf`);
+  };
+
+  // ── UPDATE UI ──
+  function updateDashboard(data) {
+    const { mq135, mq2, fan_pct, gas_type, gas_conf, lstm_t30, lstm_t60 } = data;
+    const now = new Date().toLocaleTimeString('en-IN', { hour12: false });
+
+    // Cards
+    document.getElementById('mq135Val').textContent = Math.round(mq135);
+    document.getElementById('mq2Val').textContent   = Math.round(mq2);
+    document.getElementById('fanVal').textContent   = Math.round(fan_pct) + '%';
+    document.getElementById('fanBar').style.width   = fan_pct + '%';
+    document.getElementById('gasType').textContent  = gas_type || '---';
+    document.getElementById('gasConf').textContent  = `Classifier confidence: ${Math.round(gas_conf || 0)}%`;
+    document.getElementById('lstmForecast').textContent = `LSTM +30s: ${Math.round(lstm_t30||0)} ppm  ·  +60s: ${Math.round(lstm_t60||0)} ppm`;
+
+    // Score
+    const score = calcScore(mq135, mq2);
+    updateScoreUI(score);
+
+    // Chart
+    if (chartLabels.length >= MAX_POINTS) {
+      chartLabels.shift(); mq135Data.shift(); mq2Data.shift(); lstmData.shift();
+    }
+    chartLabels.push(now);
+    mq135Data.push(mq135);
+    mq2Data.push(mq2);
+    lstmData.push(lstm_t30 || null);
+    chart.update('none');
+
+    // Heatmap
+    updateHeatmap((mq135 + mq2) / 2);
+
+    // Incident detection
+    if (mq135 > DANGER_PPM || mq2 > DANGER_PPM) {
+      logIncident(gas_type || 'UNKNOWN', mq135, mq2, 'Fan auto-triggered + Alert sent', 'high');
+    } else if (mq135 > DANGER_PPM * 0.7 || mq2 > DANGER_PPM * 0.7) {
+      logIncident(gas_type || 'UNKNOWN', mq135, mq2, 'Fan speed increased', 'medium');
+    }
+  }
+
+  // ── MOCK DATA GENERATOR ──
+  let mockTick = 0;
+  function mockReading() {
+    mockTick++;
+    const base135 = 180 + Math.sin(mockTick / 8) * 60 + Math.random() * 30;
+    const base2   = 120 + Math.cos(mockTick / 6) * 40 + Math.random() * 20;
+    const spike   = (mockTick % 40 === 0) ? 320 : 0; // occasional spike
+    return {
+      mq135:    base135 + spike,
+      mq2:      base2 + spike * 0.6,
+      fan_pct:  Math.min(100, 30 + (base135 + spike) / 8),
+      gas_type: ['CO2', 'NH3', 'LPG'][Math.floor(mockTick / 20) % 3],
+      gas_conf: 75 + Math.random() * 20,
+      lstm_t30: base135 + spike + 15 + Math.random() * 10,
+      lstm_t60: base135 + spike + 30 + Math.random() * 15,
+    };
+  }
+
+  // ── FIREBASE LISTENER ──
+  let app, db;
+  try {
+    app = initializeApp(firebaseConfig);
+    db  = getDatabase(app);
+    const sensorRef = ref(db, 'sensor/latest');
+    onValue(sensorRef, (snapshot) => {
+      const val = snapshot.val();
+      if (val && val.mq135 !== undefined) {
+        MOCK_MODE = false;
+        document.getElementById('mockBanner').className = 'mock-banner';
+        document.getElementById('dotFirebase').className = 'conn-dot ok';
+        document.getElementById('connFirebase').textContent = 'Connected';
+        document.getElementById('dotEsp').className = 'conn-dot ok';
+        document.getElementById('connEsp').textContent = 'Online';
+        updateDashboard(val);
+      }
+    });
+    document.getElementById('dotFirebase').className = 'conn-dot ok';
+    document.getElementById('connFirebase').textContent = 'Initialized';
+  } catch(e) {
+    document.getElementById('connFirebase').textContent = 'Init failed';
+  }
+
+  // ── FLASK API POLLER ──
+  async function pollApi() {
+    try {
+      const [histRes, predRes] = await Promise.all([
+        fetch(`${API_URL}/history`),
+        fetch(`${API_URL}/predict`)
+      ]);
+      if (histRes.ok) {
+        const hist = await histRes.json();
+        const pred = predRes.ok ? await predRes.json() : {};
+        const latest = Array.isArray(hist) ? hist[hist.length - 1] : hist;
+        if (latest) {
+          MOCK_MODE = false;
+          document.getElementById('mockBanner').className = 'mock-banner';
+          document.getElementById('dotApi').className = 'conn-dot ok';
+          document.getElementById('connApi').textContent = 'Connected';
+          updateDashboard({ ...latest, lstm_t30: pred.t30, lstm_t60: pred.t60 });
+        }
+      }
+    } catch(e) {
+      // silent fail — mock will keep running
+    }
+  }
+
+  // ── MAIN LOOP ──
+  function tick() {
+    if (MOCK_MODE) updateDashboard(mockReading());
+    pollApi();
+  }
+
+  tick();
+  setInterval(tick, 5000);
+
+</script>
+
+</body>
+</html>
